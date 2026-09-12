@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DayZ Territory Zone Editor</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --bg-deep:#0d1210;
+    --panel:#141a17;
+    --panel-2:#1b221d;
+    --border:#2a332c;
+    --amber:#c9a24b;
+    --amber-dim:#8a713a;
+    --olive:#6b8f5e;
+    --text:#d8ddd4;
+    --text-dim:#8a9388;
+    --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:var(--bg-deep);color:var(--text);font-family:var(--sans);}
+  #app{display:flex;height:100vh;width:100vw;}
+
+  #panel{
+    width:340px;min-width:340px;
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    overflow-y:auto;
+  }
+  #panel h1{
+    font-size:14px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--amber);margin:0;padding:18px 18px 4px;
+    font-weight:600;
+  }
+  #panel .sub{
+    padding:0 18px 16px;color:var(--text-dim);font-size:12px;
+    border-bottom:1px solid var(--border);
+  }
+  .section{padding:16px 18px;border-bottom:1px solid var(--border);}
+  .section-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+  .section-head h2{margin:0;}
+  .auth-summary{font-size:10px;color:var(--olive);font-family:var(--mono);display:none;}
+  #authSection.collapsed .auth-summary{display:inline;}
+  #authSection.collapsed #authBody{display:none;}
+  #authSection:not(.collapsed) #authBody{display:block;}
+  .section h2{
+    font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--olive);margin:0 0 10px;font-weight:600;
+  }
+  label{display:block;font-size:11px;color:var(--text-dim);margin:10px 0 4px;}
+  label:first-child{margin-top:0;}
+  select{
+    width:100%;background:var(--bg-deep);border:1px solid var(--border);
+    color:var(--text);padding:8px;border-radius:3px;font-family:var(--mono);
+    font-size:12px;
+  }
+  input[type=text],input[type=password],input[type=number]{
+    width:100%;background:var(--bg-deep);border:1px solid var(--border);
+    color:var(--text);padding:7px 8px;border-radius:3px;font-family:var(--mono);
+    font-size:12px;
+  }
+  input[type=text]:focus,input[type=password]:focus,input[type=number]:focus{outline:1px solid var(--amber-dim);}
+  .hint{font-size:10px;color:var(--text-dim);margin-top:8px;line-height:1.5;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+  button{
+    width:100%;padding:10px;border-radius:3px;border:1px solid var(--border);
+    background:var(--panel-2);color:var(--text);font-family:var(--sans);
+    font-size:12px;font-weight:600;letter-spacing:.03em;cursor:pointer;
+    transition:background .15s,border-color .15s;
+  }
+  button:hover:not(:disabled){border-color:var(--amber-dim);}
+  button.primary{background:var(--amber);color:#181410;border-color:var(--amber);}
+  button.primary:hover:not(:disabled){background:#dcb35c;}
+
+  button.danger{border-color:#7a2e26;}
+  button.danger:hover:not(:disabled){background:#3a1a16;border-color:#c9483a;}
+  .btnrow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
+  .btnrow3 button{padding:7px;font-size:10.5px;}
+
+  #status,#loadStatus,#exportStatus{
+    font-family:var(--mono);font-size:11px;color:var(--text-dim);
+    white-space:pre-line;line-height:1.6;margin-top:10px;
+  }
+  .ok{color:var(--olive);}
+  .warn{color:var(--amber);}
+  .err{color:#c96b4b;}
+
+  #dropZone{
+    border:1px dashed var(--border);border-radius:4px;padding:18px 12px;text-align:center;
+    font-size:11px;color:var(--text-dim);cursor:pointer;
+    transition:border-color .15s,background .15s,color .15s;
+  }
+  #dropZone.dragover{border-color:var(--amber);background:rgba(201,162,75,0.08);color:var(--amber);}
+
+  #legend{max-height:200px;overflow-y:auto;margin-top:2px;}
+  .legend-row{display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 0;color:var(--text-dim);cursor:pointer;}
+  .legend-row input[type=checkbox]{accent-color:var(--amber);cursor:pointer;flex-shrink:0;}
+  .legend-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.4);}
+  .legend-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .legend-count{color:var(--text-dim);font-size:10px;}
+
+  #editorSection{display:none;}
+  #editorSection h2{color:#ffffff;font-weight:700;}
+  #editorLabel{font-size:12px;color:#ffffff;font-weight:700;margin-bottom:8px;}
+
+  #mapwrap{position:relative;flex:1;}
+  #map{position:absolute;inset:0;background:#050705;}
+  .leaflet-container{background:#050705;font-family:var(--sans);}
+
+  #coordsBox{
+    position:absolute;bottom:16px;right:16px;z-index:1000;
+    background:rgba(20,26,23,.92);border:1px solid var(--border);
+    border-radius:4px;padding:8px 12px;font-family:var(--mono);
+    font-size:11px;color:var(--amber);pointer-events:none;letter-spacing:.02em;
+  }
+  .zone-marker{
+    width:14px;height:14px;border-radius:50%;
+    border:2px solid #0d1210;box-shadow:0 0 6px 1px rgba(0,0,0,.6);
+    cursor:pointer;
+  }
+  .zone-marker.selected{
+    animation: zonePulse 1s ease-in-out infinite;
+    border-color:#ff3b30;
+  }
+  @keyframes zonePulse{
+    0%,100%{ box-shadow:0 0 6px 2px rgba(255,59,48,.9); }
+    50%{ box-shadow:0 0 14px 5px rgba(255,59,48,.95); }
+  }
+  .leaflet-tooltip{
+    background:rgba(20,26,23,.95)!important;border:1px solid var(--border)!important;
+    color:var(--text)!important;font-family:var(--mono)!important;font-size:11px!important;
+    line-height:1.5!important;
+  }
+  .leaflet-tooltip-top:before{border-top-color:var(--border)!important;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="panel">
+    <h1>Territory Zone Editor</h1>
+    <div class="sub">Load a territory XML, edit zones on the map, export the result.</div>
+
+    <div class="section" id="authSection">
+      <div class="section-head" id="authHead">
+        <h2>1 — GitHub access</h2>
+        <span id="authSummary" class="auth-summary"></span>
+      </div>
+      <div id="authBody">
+        <label>Token</label>
+        <input type="password" id="ghToken" placeholder="ghp_...">
+        <div class="hint">Password cached locally. Used to load the tiled map.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>2 — Map</h2>
+      <select id="mapSelect">
+        <option value="Chernarus">Chernarus</option>
+        <option value="Livonia">Livonia</option>
+        <option value="Sakhal">Sakhal</option>
+      </select>
+      <div id="status">Loading Chernarus…</div>
+    </div>
+
+    <div class="section">
+      <h2>3 — Territory file</h2>
+      <div id="dropZone">Drag &amp; drop a territory XML here,<br>or click to choose a file</div>
+      <input type="file" id="fileInput" accept=".xml" style="display:none">
+      <div id="loadStatus"></div>
+    </div>
+
+    <div class="section" id="filterSection" style="display:none">
+      <h2>4 — Filter markers</h2>
+      <div class="btnrow3">
+        <button id="filterAllBtn">All</button>
+        <button id="filterNoneBtn">None</button>
+        <button id="filterInvertBtn">Invert</button>
+      </div>
+      <div id="legend"></div>
+    </div>
+
+    <div class="section" id="editorSection">
+      <h2>5 — Selected zone</h2>
+      <div id="editorLabel"></div>
+      <label>Name</label>
+      <input type="text" id="editName" list="zoneNamesList" autocomplete="off">
+      <datalist id="zoneNamesList"></datalist>
+      <div class="row2">
+        <div><label>smin</label><input type="number" id="editSmin"></div>
+        <div><label>smax</label><input type="number" id="editSmax"></div>
+      </div>
+      <div class="row2">
+        <div><label>dmin</label><input type="number" id="editDmin"></div>
+        <div><label>dmax</label><input type="number" id="editDmax"></div>
+      </div>
+      <div class="row2">
+        <div><label>X</label><input type="number" id="editX" step="0.01"></div>
+        <div><label>Z</label><input type="number" id="editZ" step="0.01"></div>
+      </div>
+      <label>Radius</label>
+      <input type="number" id="editR" step="0.01">
+      <div class="hint">Drag a marker to move it. Double-click a marker, then move the mouse and click to set its radius.</div>
+      <div class="row2" style="margin-top:12px;">
+        <button id="dupZoneBtn">Duplicate</button>
+        <button id="delZoneBtn" class="danger">Delete</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>6 — Export</h2>
+      <button id="exportBtn" class="primary">Export updated XML</button>
+      <div id="exportStatus"></div>
+    </div>
+  </div>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="coordsBox">X —   Z —</div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------- per-map presets ----------
+  const MAP_DEFAULTS = {
+    Chernarus: { worldSize: 15360, tileUrl: 'tiles/chernarus/{z}/{x}/{y}.webp', maxZoom: 7, tms: false },
+    Livonia:   { worldSize: 12800, tileUrl: 'tiles/livonia/{z}/{x}/{y}.webp',   maxZoom: 7, tms: false },
+    Sakhal:    { worldSize: 15360, tileUrl: 'tiles/sakhal/{z}/{x}/{y}.webp',    maxZoom: 7, tms: false }
+  };
+
+  // ---------- GitHub access (tiles only) ----------
+  const GH_OWNER = atob('bWlja21vbms3Nw==');
+  const GH_REPO_TILES = atob('T2JqZWN0RXh0cmFjdG9y');   // ObjectExtractor — tiles
+  const GH_BRANCH = atob('bWFpbg==');
+  const LS_TOKEN_KEY = 'oe_gh_token';
+
+  function ghToken(){ return el('ghToken').value.trim(); }
+  function ghApiHeaders(token){
+    return { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+  }
+  function b64ToBytes(b64){
+    const binary = atob(b64.replace(/\n/g, ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  async function ghFetchBytes(repo, path, signal){
+    const token = ghToken();
+    if (!token) return { status: 'error', message: 'no token set' };
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    const url = `https://api.github.com/repos/${GH_OWNER}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(GH_BRANCH)}`;
+    try{
+      const res = await fetch(url, { headers: ghApiHeaders(token), signal });
+      if (res.status === 404) return { status: 'missing' };
+      if (res.status === 401) return { status: 'error', message: 'Unauthorized — check the token' };
+      if (res.status === 403) return { status: 'error', message: 'Forbidden — token permissions insufficient or rate limited' };
+      if (!res.ok) return { status: 'error', message: `GitHub error ${res.status}` };
+
+      const data = await res.json();
+      if (data.content && data.encoding === 'base64'){
+        return { status: 'ok', bytes: b64ToBytes(data.content) };
+      }
+      if (data.sha){
+        const blobUrl = `https://api.github.com/repos/${GH_OWNER}/${repo}/git/blobs/${data.sha}`;
+        const blobRes = await fetch(blobUrl, { headers: ghApiHeaders(token), signal });
+        if (!blobRes.ok) return { status: 'error', message: `GitHub error ${blobRes.status}` };
+        const blob = await blobRes.json();
+        if (blob.content && blob.encoding === 'base64'){
+          return { status: 'ok', bytes: b64ToBytes(blob.content) };
+        }
+      }
+      return { status: 'error', message: 'Could not read file content from GitHub' };
+    } catch(err){
+      if (err && err.name === 'AbortError') return { status: 'stale' };
+      return { status: 'error', message: (err && err.message) || 'network error' };
+    }
+  }
+
+  // ---------- map state ----------
+  let currentMap = 'Chernarus';
+  let map = null;
+  let tileLayer = null;
+  let gridLayer = null;
+  let zoneLayerGroup = null;
+  let tilesLoadedOnce = false;
+  let authAutoCollapsed = false;
+  function maybeAutoCollapseAuth(){
+    if (tilesLoadedOnce && !authAutoCollapsed){
+      authAutoCollapsed = true;
+      el('authSummary').textContent = 'token ok';
+      el('authSection').classList.add('collapsed');
+    }
+  }
+
+  const el = id => document.getElementById(id);
+
+  el('ghToken').value = localStorage.getItem(LS_TOKEN_KEY) || '';
+  el('ghToken').addEventListener('change', ()=>{
+    localStorage.setItem(LS_TOKEN_KEY, ghToken());
+    window._ghTileWarned = false;
+    tilesLoadedOnce = false;
+    authAutoCollapsed = false;
+    initMap();
+  });
+  el('authHead').addEventListener('click', ()=>{
+    el('authSection').classList.toggle('collapsed');
+  });
+
+  // tile cache
+  const tileCache = {};
+  const tileInflight = {};
+  function createLimiter(maxConcurrent){
+    let active = 0;
+    const queue = [];
+    function runNext(){
+      if (active >= maxConcurrent || queue.length === 0) return;
+      active++;
+      const job = queue.shift();
+      job.fn().then(job.resolve, job.reject).finally(()=>{ active--; runNext(); });
+    }
+    return function limit(fn){
+      return new Promise((resolve, reject)=>{
+        queue.push({ fn, resolve, reject });
+        runNext();
+      });
+    };
+  }
+  const tileLimiter = createLimiter(6);
+  const tileNeeded = {};
+  const tileAbortControllers = {};
+
+  // ---------- CRS / map setup ----------
+  function buildCRS(worldSize, tileSize){
+    const scaleAtZoom0 = tileSize / worldSize;
+    return L.extend({}, L.CRS.Simple, {
+      transformation: new L.Transformation(scaleAtZoom0, 0, scaleAtZoom0, 0)
+    });
+  }
+  function worldToLatLng(x, z, worldSize){ return L.latLng(worldSize - z, x); }
+  function latLngToWorld(latlng, worldSize){ return { x: latlng.lng, z: worldSize - latlng.lat }; }
+
+  const BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+  function startTileFetch(path){
+    const p = tileLimiter(() => {
+      if ((tileNeeded[path] || 0) <= 0) return Promise.resolve({ status: 'stale' });
+      const controller = new AbortController();
+      tileAbortControllers[path] = controller;
+      return ghFetchBytes(GH_REPO_TILES, path, controller.signal);
+    }).then(result=>{
+      delete tileAbortControllers[path];
+      if (result.status === 'stale') return undefined;
+      if (result.status === 'missing'){ tileCache[path] = null; return null; }
+      if (result.status === 'error'){
+        if (!window._ghTileWarned){
+          window._ghTileWarned = true;
+          el('status').innerHTML = `<span class="err">Tile load failed: ${result.message}</span>`;
+        }
+        return undefined;
+      }
+      const blob = new Blob([result.bytes], { type: 'image/webp' });
+      const objUrl = URL.createObjectURL(blob);
+      tileCache[path] = objUrl;
+      tilesLoadedOnce = true;
+      maybeAutoCollapseAuth();
+      return objUrl;
+    }).finally(()=>{ delete tileInflight[path]; });
+    tileInflight[path] = p;
+    return p;
+  }
+  function resolveTile(path){
+    if (tileCache[path] !== undefined) return Promise.resolve(tileCache[path]);
+    if (tileInflight[path]){
+      return tileInflight[path].then(url=>{
+        if (url === undefined && (tileNeeded[path] || 0) > 0) return startTileFetch(path);
+        return url;
+      });
+    }
+    return startTileFetch(path);
+  }
+
+  const AuthTileLayer = L.TileLayer.extend({
+    createTile: function(coords, done){
+      const img = document.createElement('img');
+      let x = coords.x, y = coords.y;
+      const z = coords.z;
+      if (this.options.tms) y = Math.pow(2, z) - 1 - y;
+      const path = this._url.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+      tileNeeded[path] = (tileNeeded[path] || 0) + 1;
+      resolveTile(path).then(url=>{
+        img.src = (url === null || url === undefined) ? BLANK_TILE : url;
+        done(null, img);
+      });
+      return img;
+    }
+  });
+
+  function onTileUnload(e){
+    let x = e.coords.x, y = e.coords.y;
+    const z = e.coords.z;
+    const cfg = MAP_DEFAULTS[currentMap];
+    if (cfg.tms) y = Math.pow(2, z) - 1 - y;
+    const path = cfg.tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+    tileNeeded[path] = (tileNeeded[path] || 1) - 1;
+    if (tileNeeded[path] <= 0 && tileAbortControllers[path]){
+      tileAbortControllers[path].abort();
+      delete tileAbortControllers[path];
+    }
+  }
+
+  // ---------- 1000m grid overlay ----------
+  function buildGrid(worldSize){
+    const group = L.layerGroup();
+    const lineColor = 'rgba(201,162,75,0.38)';
+    for (let x = 0; x <= worldSize; x += 1000){
+      group.addLayer(L.polyline(
+        [worldToLatLng(x, 0, worldSize), worldToLatLng(x, worldSize, worldSize)],
+        { color: lineColor, weight: 1, interactive: false }
+      ));
+    }
+    for (let z = 0; z <= worldSize; z += 1000){
+      group.addLayer(L.polyline(
+        [worldToLatLng(0, z, worldSize), worldToLatLng(worldSize, z, worldSize)],
+        { color: lineColor, weight: 1, interactive: false }
+      ));
+    }
+    return group;
+  }
+
+  // ---------- map init ----------
+  function initMap(){
+    window._ghTileWarned = false;
+    const cfg = MAP_DEFAULTS[currentMap];
+    if (map) { map.remove(); map = null; }
+
+    const tileSize = 256;
+    const CRS = buildCRS(cfg.worldSize, tileSize);
+
+    map = L.map('map', {
+      crs: CRS, minZoom: 0, maxZoom: cfg.maxZoom,
+      zoomControl: false, attributionControl: false, maxBoundsViscosity: 0.4
+    });
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    tileLayer = new AuthTileLayer(cfg.tileUrl, {
+      minZoom: 0, maxZoom: cfg.maxZoom, tileSize: tileSize,
+      noWrap: true, tms: cfg.tms, errorTileUrl: ''
+    }).addTo(map);
+    tileLayer.on('tileunload', onTileUnload);
+
+    const full = tileSize * Math.pow(2, cfg.maxZoom);
+    const pad = full * 0.25;
+    map.setMaxBounds([[-pad, -pad], [full + pad, full + pad]]);
+    map.fitBounds([[0,0],[full,full]], { padding: [30, 30] });
+
+    if (gridLayer) gridLayer.remove();
+    gridLayer = buildGrid(cfg.worldSize).addTo(map);
+
+    zoneLayerGroup = L.layerGroup().addTo(map);
+
+    map.on('mousemove', onMouseMove);
+    map.on('click', onMapBackgroundClick);
+
+    window._worldSize = cfg.worldSize;
+    el('status').innerHTML = `<span class="ok">${currentMap} loaded.</span>`;
+
+    // re-render any already-loaded zones on the new map instance
+    if (Object.keys(zonesById).length) renderAllZones();
+  }
+
+  el('mapSelect').addEventListener('change', ()=>{
+    currentMap = el('mapSelect').value;
+    initMap();
+  });
+
+  function onMouseMove(e){
+    const w = latLngToWorld(e.latlng, window._worldSize);
+    const cx = Math.min(window._worldSize, Math.max(0, w.x));
+    const cz = Math.min(window._worldSize, Math.max(0, w.z));
+    el('coordsBox').textContent = `X ${cx.toFixed(0)}   Z ${cz.toFixed(0)}`;
+  }
+
+  // ---------- helpers ----------
+  function round3(v){ return Math.round(v * 1000) / 1000; }
+  function formatNum(v){ return Number.isInteger(v) ? String(v) : String(round3(v)); }
+  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escapeXmlAttr(v){ return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ---------- XML parsing ----------
+  function extractProlog(text){
+    const m = text.match(/^\s*(<\?xml[^>]*\?>)/);
+    return m ? m[1] : null;
+  }
+
+  function parseTerritoryXML(text){
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'application/xml');
+    const errorNode = doc.querySelector('parsererror');
+    if (errorNode) throw new Error('XML parse error — ' + errorNode.textContent.trim().slice(0, 200));
+
+    const root = doc.documentElement;
+    if (!root) throw new Error('No root element found');
+
+    const rootAttrs = {};
+    for (const a of Array.from(root.attributes)) rootAttrs[a.name] = a.value;
+
+    const territories = [];
+    const zonesById = {};
+
+    for (const terrNode of Array.from(root.children)){
+      if (terrNode.nodeName.toLowerCase() !== 'territory') continue;
+      const attrs = {};
+      for (const a of Array.from(terrNode.attributes)) attrs[a.name] = a.value;
+
+      const groups = [];
+      let currentGroup = null;
+
+      for (const node of Array.from(terrNode.childNodes)){
+        if (node.nodeType === Node.COMMENT_NODE){
+          currentGroup = { label: node.textContent.trim(), zoneIds: [] };
+          groups.push(currentGroup);
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.nodeName.toLowerCase() === 'zone'){
+          const zAttrs = {};
+          for (const a of Array.from(node.attributes)) zAttrs[a.name] = a.value;
+          const id = 'z' + (idCounter++);
+          const known = ['name','smin','smax','dmin','dmax','x','z','r'];
+          const otherAttrs = {};
+          for (const k in zAttrs){ if (!known.includes(k)) otherAttrs[k] = zAttrs[k]; }
+          if (!currentGroup){ currentGroup = { label: '', zoneIds: [] }; groups.push(currentGroup); }
+          const zone = {
+            id,
+            name: zAttrs.name || '',
+            smin: zAttrs.smin !== undefined ? zAttrs.smin : '0',
+            smax: zAttrs.smax !== undefined ? zAttrs.smax : '0',
+            dmin: zAttrs.dmin !== undefined ? zAttrs.dmin : '0',
+            dmax: zAttrs.dmax !== undefined ? zAttrs.dmax : '0',
+            x: parseFloat(zAttrs.x) || 0,
+            z: parseFloat(zAttrs.z) || 0,
+            r: parseFloat(zAttrs.r) || 0,
+            label: currentGroup.label,
+            otherAttrs,
+            _group: currentGroup
+          };
+          zonesById[id] = zone;
+          currentGroup.zoneIds.push(id);
+        }
+      }
+      territories.push({ attrs, groups });
+    }
+
+    return { rootAttrs, territories, zonesById };
+  }
+
+  function serializeTerritoryXML(){
+    let out = '';
+    if (state.xmlProlog) out += state.xmlProlog + '\n';
+    const rootAttrStr = Object.entries(state.rootAttrs || {}).map(([k,v])=>` ${k}="${escapeXmlAttr(v)}"`).join('');
+    out += `<territory-type${rootAttrStr}>\n`;
+    for (const terr of state.territories){
+      const terrAttrStr = Object.entries(terr.attrs).map(([k,v])=>` ${k}="${escapeXmlAttr(v)}"`).join('');
+      out += `\t<territory${terrAttrStr}>\n`;
+      for (const group of terr.groups){
+        if (group.label) out += `\t\t<!-- ${group.label} -->\n`;
+        for (const id of group.zoneIds){
+          const z = zonesById[id];
+          if (!z) continue;
+          const otherAttrStr = Object.entries(z.otherAttrs || {}).map(([k,v])=>` ${k}="${escapeXmlAttr(v)}"`).join('');
+          out += `\t\t<zone name="${escapeXmlAttr(z.name)}" smin="${escapeXmlAttr(z.smin)}" smax="${escapeXmlAttr(z.smax)}" dmin="${escapeXmlAttr(z.dmin)}" dmax="${escapeXmlAttr(z.dmax)}" x="${formatNum(z.x)}" z="${formatNum(z.z)}" r="${formatNum(z.r)}"${otherAttrStr}/>\n`;
+        }
+      }
+      out += `\t</territory>\n`;
+    }
+    out += `</territory-type>\n`;
+    return out;
+  }
+
+  // ---------- app state ----------
+  const state = { rootAttrs: {}, territories: [], xmlProlog: null, fileBaseName: 'territories', fileExt: '.xml' };
+  let zonesById = {};
+  let nameColors = {};
+  let selectedZoneId = null;
+  let radiusEditId = null;
+  let idCounter = 1;
+  let hiddenNames = new Set();
+  let lastLegendNames = new Set();
+  let radiusEditOriginal = null;
+
+  const PALETTE = ['#c9a24b','#7ac76e','#e06046','#5aa9e6','#c17fe0','#e0c14b','#4bc9b0','#e07fae','#8fbf5a','#bf5a8f','#5abf8f','#bf8f5a','#e0925a','#7f9ee0'];
+  function getColorForName(name){
+    if (!nameColors[name]) nameColors[name] = PALETTE[Object.keys(nameColors).length % PALETTE.length];
+    return nameColors[name];
+  }
+
+  function buildZoneTooltip(z){
+    const lines = [];
+    lines.push(`name: ${escapeHtml(z.name)}`);
+    lines.push(`smin/smax: ${escapeHtml(z.smin)} / ${escapeHtml(z.smax)}`);
+    lines.push(`dmin/dmax: ${escapeHtml(z.dmin)} / ${escapeHtml(z.dmax)}`);
+    lines.push(`x: ${round3(z.x)}&nbsp;&nbsp;z: ${round3(z.z)}`);
+    lines.push(`r: ${round3(z.r)}`);
+    return lines.join('<br>');
+  }
+
+  function clearZoneLayer(){
+    if (zoneLayerGroup) zoneLayerGroup.clearLayers();
+  }
+
+  function plantZoneMarker(z){
+    const color = getColorForName(z.name);
+    const latlng = worldToLatLng(z.x, z.z, window._worldSize);
+    const circle = L.circle(latlng, { radius: z.r, color, weight: 2, fillColor: color, fillOpacity: 0.15, interactive: false }).addTo(zoneLayerGroup);
+    const icon = L.divIcon({ className: '', html: `<div class="zone-marker" style="background:${color}"></div>`, iconSize: [14,14], iconAnchor: [7,7] });
+    const marker = L.marker(latlng, { icon, draggable: true }).addTo(zoneLayerGroup);
+    marker.bindTooltip(buildZoneTooltip(z), { direction: 'top', offset: [0,-8] });
+    z.marker = marker;
+    z.circle = circle;
+
+    marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); selectZone(z.id); });
+    marker.on('dblclick', (e)=>{ L.DomEvent.stopPropagation(e); startRadiusEdit(z.id); });
+    marker.on('drag', ()=>{ circle.setLatLng(marker.getLatLng()); });
+    marker.on('dragend', ()=>{
+      const w = latLngToWorld(marker.getLatLng(), window._worldSize);
+      z.x = w.x; z.z = w.z;
+      marker.setTooltipContent(buildZoneTooltip(z));
+      if (selectedZoneId === z.id) syncEditorFromZone(z);
+    });
+  }
+
+  function renderAllZones(){
+    clearZoneLayer();
+    for (const id in zonesById) plantZoneMarker(zonesById[id]);
+    refreshZoneNamesList();
+    if (selectedZoneId && zonesById[selectedZoneId]) setMarkerSelected(zonesById[selectedZoneId], true);
+  }
+
+  function refreshZoneNamesList(){
+    const names = new Set(Object.values(zonesById).map(z => z.name).filter(Boolean));
+    const dl = el('zoneNamesList');
+    dl.innerHTML = Array.from(names).sort().map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+    lastLegendNames = names;
+    el('filterSection').style.display = names.size ? 'block' : 'none';
+    renderLegend(names);
+    applyFilter();
+  }
+
+  function renderLegend(names){
+    const legend = el('legend');
+    const sorted = Array.from(names).sort();
+    const counts = {};
+    Object.values(zonesById).forEach(z => { counts[z.name] = (counts[z.name] || 0) + 1; });
+    legend.innerHTML = sorted.length
+      ? sorted.map(n => `
+        <label class="legend-row">
+          <input type="checkbox" class="legend-check" data-name="${escapeHtml(n)}" ${hiddenNames.has(n) ? '' : 'checked'}>
+          <span class="legend-swatch" style="background:${getColorForName(n)}"></span>
+          <span class="legend-name">${escapeHtml(n)}</span>
+          <span class="legend-count">${counts[n] || 0}</span>
+        </label>`).join('')
+      : '';
+  }
+
+  function applyFilter(){
+    if (!zoneLayerGroup) return;
+    for (const id in zonesById){
+      const z = zonesById[id];
+      const visible = !hiddenNames.has(z.name);
+      if (!z.marker || !z.circle) continue;
+      if (visible){
+        if (!zoneLayerGroup.hasLayer(z.marker)) zoneLayerGroup.addLayer(z.marker);
+        if (!zoneLayerGroup.hasLayer(z.circle)) zoneLayerGroup.addLayer(z.circle);
+      } else {
+        if (zoneLayerGroup.hasLayer(z.marker)) zoneLayerGroup.removeLayer(z.marker);
+        if (zoneLayerGroup.hasLayer(z.circle)) zoneLayerGroup.removeLayer(z.circle);
+        if (selectedZoneId === id) deselect();
+      }
+    }
+  }
+
+  el('legend').addEventListener('change', (e)=>{
+    if (!e.target.classList.contains('legend-check')) return;
+    const name = e.target.dataset.name;
+    if (e.target.checked) hiddenNames.delete(name); else hiddenNames.add(name);
+    applyFilter();
+  });
+  el('filterAllBtn').addEventListener('click', ()=>{
+    hiddenNames.clear();
+    renderLegend(lastLegendNames);
+    applyFilter();
+  });
+  el('filterNoneBtn').addEventListener('click', ()=>{
+    hiddenNames = new Set(lastLegendNames);
+    renderLegend(lastLegendNames);
+    applyFilter();
+  });
+  el('filterInvertBtn').addEventListener('click', ()=>{
+    const inverted = new Set();
+    lastLegendNames.forEach(n => { if (!hiddenNames.has(n)) inverted.add(n); });
+    hiddenNames = inverted;
+    renderLegend(lastLegendNames);
+    applyFilter();
+  });
+
+  function restyleMarker(z){
+    const color = getColorForName(z.name);
+    z.marker.setIcon(L.divIcon({ className: '', html: `<div class="zone-marker" style="background:${color}"></div>`, iconSize: [14,14], iconAnchor: [7,7] }));
+    z.circle.setStyle({ color, fillColor: color });
+  }
+
+  // ---------- selection / editor ----------
+  function setMarkerSelected(z, selected){
+    if (!z || !z.marker) return;
+    const domEl = z.marker.getElement();
+    if (!domEl) return;
+    const inner = domEl.querySelector('.zone-marker');
+    if (inner) inner.classList.toggle('selected', selected);
+  }
+
+  function selectZone(id){
+    if (selectedZoneId && selectedZoneId !== id) setMarkerSelected(zonesById[selectedZoneId], false);
+    selectedZoneId = id;
+    const z = zonesById[id];
+    setMarkerSelected(z, true);
+    el('editorSection').style.display = 'block';
+    el('editorLabel').textContent = z.label ? `// ${z.label}` : '(no label comment)';
+    syncEditorFromZone(z);
+  }
+
+  function syncEditorFromZone(z){
+    el('editName').value = z.name;
+    el('editSmin').value = z.smin;
+    el('editSmax').value = z.smax;
+    el('editDmin').value = z.dmin;
+    el('editDmax').value = z.dmax;
+    el('editX').value = round3(z.x);
+    el('editZ').value = round3(z.z);
+    el('editR').value = round3(z.r);
+  }
+
+  function deselect(){
+    if (selectedZoneId) setMarkerSelected(zonesById[selectedZoneId], false);
+    selectedZoneId = null;
+    el('editorSection').style.display = 'none';
+  }
+
+  el('editName').addEventListener('change', ()=>{
+    if (!selectedZoneId) return;
+    const z = zonesById[selectedZoneId];
+    z.name = el('editName').value.trim();
+    restyleMarker(z);
+    setMarkerSelected(z, true);
+    z.marker.setTooltipContent(buildZoneTooltip(z));
+    refreshZoneNamesList();
+  });
+  ['Smin','Smax','Dmin','Dmax'].forEach(suffix=>{
+    el('edit' + suffix).addEventListener('change', ()=>{
+      if (!selectedZoneId) return;
+      const z = zonesById[selectedZoneId];
+      z[suffix.toLowerCase()] = el('edit' + suffix).value;
+      z.marker.setTooltipContent(buildZoneTooltip(z));
+    });
+  });
+  el('editX').addEventListener('change', ()=>{
+    if (!selectedZoneId) return;
+    const z = zonesById[selectedZoneId];
+    z.x = parseFloat(el('editX').value);
+    if (isNaN(z.x)) z.x = 0;
+    const ll = worldToLatLng(z.x, z.z, window._worldSize);
+    z.marker.setLatLng(ll); z.circle.setLatLng(ll);
+    z.marker.setTooltipContent(buildZoneTooltip(z));
+  });
+  el('editZ').addEventListener('change', ()=>{
+    if (!selectedZoneId) return;
+    const z = zonesById[selectedZoneId];
+    z.z = parseFloat(el('editZ').value);
+    if (isNaN(z.z)) z.z = 0;
+    const ll = worldToLatLng(z.x, z.z, window._worldSize);
+    z.marker.setLatLng(ll); z.circle.setLatLng(ll);
+    z.marker.setTooltipContent(buildZoneTooltip(z));
+  });
+  el('editR').addEventListener('change', ()=>{
+    if (!selectedZoneId) return;
+    const z = zonesById[selectedZoneId];
+    z.r = parseFloat(el('editR').value);
+    if (isNaN(z.r) || z.r < 0) z.r = 0;
+    z.circle.setRadius(z.r);
+    z.marker.setTooltipContent(buildZoneTooltip(z));
+  });
+
+  // ---------- delete / duplicate ----------
+  function deleteZone(id){
+    const z = zonesById[id];
+    if (!z) return;
+    if (zoneLayerGroup){
+      if (z.marker) zoneLayerGroup.removeLayer(z.marker);
+      if (z.circle) zoneLayerGroup.removeLayer(z.circle);
+    }
+    if (z._group){
+      const idx = z._group.zoneIds.indexOf(id);
+      if (idx >= 0) z._group.zoneIds.splice(idx, 1);
+      if (z._group.zoneIds.length === 0){
+        for (const terr of state.territories){
+          const gi = terr.groups.indexOf(z._group);
+          if (gi >= 0){ terr.groups.splice(gi, 1); break; }
+        }
+      }
+    }
+    delete zonesById[id];
+    if (selectedZoneId === id) deselect();
+    refreshZoneNamesList();
+  }
+
+  function duplicateZone(id){
+    const src = zonesById[id];
+    if (!src) return;
+    const newId = 'z' + (idCounter++);
+    const clone = {
+      id: newId,
+      name: src.name,
+      smin: src.smin, smax: src.smax, dmin: src.dmin, dmax: src.dmax,
+      x: src.x + 10, z: src.z + 10, r: src.r,
+      label: src.label,
+      otherAttrs: Object.assign({}, src.otherAttrs),
+      _group: src._group
+    };
+    zonesById[newId] = clone;
+    if (src._group){
+      const idx = src._group.zoneIds.indexOf(id);
+      src._group.zoneIds.splice(idx + 1, 0, newId);
+    }
+    plantZoneMarker(clone);
+    refreshZoneNamesList();
+    selectZone(newId);
+  }
+
+  el('dupZoneBtn').addEventListener('click', ()=>{
+    if (selectedZoneId) duplicateZone(selectedZoneId);
+  });
+  el('delZoneBtn').addEventListener('click', ()=>{
+    if (selectedZoneId) deleteZone(selectedZoneId);
+  });
+
+  // ---------- radius drag-edit ----------
+  function startRadiusEdit(id){
+    if (radiusEditId) endRadiusEdit();
+    const z = zonesById[id];
+    radiusEditId = id;
+    radiusEditOriginal = z.r;
+    if (z.marker.dragging) z.marker.dragging.disable();
+    map.getContainer().style.cursor = 'crosshair';
+    map.on('mousemove', onRadiusEditMove);
+    map.once('click', onRadiusEditCommit);
+    document.addEventListener('keydown', onRadiusEditKey);
+  }
+  function onRadiusEditMove(e){
+    const z = zonesById[radiusEditId];
+    if (!z) return;
+    const w = latLngToWorld(e.latlng, window._worldSize);
+    const dx = w.x - z.x, dz = w.z - z.z;
+    z.circle.setRadius(Math.sqrt(dx*dx + dz*dz));
+  }
+  function onRadiusEditCommit(e){
+    const z = zonesById[radiusEditId];
+    if (z){
+      const w = latLngToWorld(e.latlng, window._worldSize);
+      const dx = w.x - z.x, dz = w.z - z.z;
+      z.r = Math.sqrt(dx*dx + dz*dz);
+      z.circle.setRadius(z.r);
+      z.marker.setTooltipContent(buildZoneTooltip(z));
+      if (selectedZoneId === z.id) syncEditorFromZone(z);
+    }
+    endRadiusEdit();
+  }
+  function onRadiusEditKey(e){
+    if (e.key === 'Escape'){
+      const z = zonesById[radiusEditId];
+      if (z){ z.circle.setRadius(radiusEditOriginal); z.r = radiusEditOriginal; }
+      endRadiusEdit();
+    }
+  }
+  function endRadiusEdit(){
+    if (radiusEditId){
+      const z = zonesById[radiusEditId];
+      if (z && z.marker.dragging) z.marker.dragging.enable();
+    }
+    map.off('mousemove', onRadiusEditMove);
+    map.off('click', onRadiusEditCommit);
+    document.removeEventListener('keydown', onRadiusEditKey);
+    map.getContainer().style.cursor = '';
+    radiusEditId = null;
+  }
+
+  function onMapBackgroundClick(){
+    if (radiusEditId) return; // being consumed by the radius-edit commit handler
+    deselect();
+  }
+
+  // ---------- file loading ----------
+  function loadXmlFile(file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const text = reader.result;
+        state.xmlProlog = extractProlog(text);
+        const parsed = parseTerritoryXML(text);
+        state.rootAttrs = parsed.rootAttrs;
+        state.territories = parsed.territories;
+        zonesById = parsed.zonesById;
+        state.fileBaseName = file.name.replace(/\.[^.]+$/, '');
+        state.fileExt = (file.name.match(/\.[^.]+$/) || ['.xml'])[0];
+        nameColors = {};
+        hiddenNames = new Set();
+        deselect();
+        renderAllZones();
+        const zCount = Object.keys(zonesById).length;
+        const tCount = state.territories.length;
+        el('loadStatus').innerHTML = `<span class="ok">Loaded ${escapeHtml(file.name)} — ${zCount} zone${zCount===1?'':'s'}, ${tCount} territor${tCount===1?'y':'ies'}</span>`;
+      }catch(err){
+        el('loadStatus').innerHTML = `<span class="err">Parse failed: ${escapeHtml(err.message)}</span>`;
+      }
+    };
+    reader.onerror = ()=>{ el('loadStatus').innerHTML = `<span class="err">Could not read file.</span>`; };
+    reader.readAsText(file);
+  }
+
+  const dropZone = el('dropZone');
+  ['dragenter','dragover'].forEach(evt => dropZone.addEventListener(evt, e=>{ e.preventDefault(); dropZone.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(evt => dropZone.addEventListener(evt, e=>{ e.preventDefault(); dropZone.classList.remove('dragover'); }));
+  dropZone.addEventListener('drop', e=>{
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) loadXmlFile(file);
+  });
+  dropZone.addEventListener('click', ()=> el('fileInput').click());
+  el('fileInput').addEventListener('change', e=>{
+    const file = e.target.files[0];
+    if (file) loadXmlFile(file);
+    e.target.value = '';
+  });
+
+  // ---------- export ----------
+  el('exportBtn').addEventListener('click', ()=>{
+    if (!Object.keys(zonesById).length){
+      el('exportStatus').innerHTML = `<span class="err">No file loaded.</span>`;
+      return;
+    }
+    const xmlText = serializeTerritoryXML();
+    const blob = new Blob([xmlText], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const dd = pad(now.getDate()), mo = pad(now.getMonth() + 1);
+    const filename = `${state.fileBaseName}_Updated_${dd}${mo}${state.fileExt}`;
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    el('exportStatus').innerHTML = `<span class="ok">Exported ${filename}</span>`;
+  });
+
+  initMap();
+})();
+</script>
+</body>
+</html>
