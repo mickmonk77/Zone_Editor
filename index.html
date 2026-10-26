@@ -76,11 +76,6 @@
   button.primary{background:var(--amber);color:#181410;border-color:var(--amber);}
   button.primary:hover:not(:disabled){background:#dcb35c;}
 
-  button.danger{border-color:#7a2e26;}
-  button.danger:hover:not(:disabled){background:#3a1a16;border-color:#c9483a;}
-  .btnrow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
-  .btnrow3 button{padding:7px;font-size:10.5px;}
-
   #status,#loadStatus,#exportStatus{
     font-family:var(--mono);font-size:11px;color:var(--text-dim);
     white-space:pre-line;line-height:1.6;margin-top:10px;
@@ -96,12 +91,9 @@
   }
   #dropZone.dragover{border-color:var(--amber);background:rgba(201,162,75,0.08);color:var(--amber);}
 
-  #legend{max-height:200px;overflow-y:auto;margin-top:2px;}
-  .legend-row{display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 0;color:var(--text-dim);cursor:pointer;}
-  .legend-row input[type=checkbox]{accent-color:var(--amber);cursor:pointer;flex-shrink:0;}
+  #legend{max-height:160px;overflow-y:auto;margin-top:8px;}
+  .legend-row{display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0;color:var(--text-dim);}
   .legend-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.4);}
-  .legend-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .legend-count{color:var(--text-dim);font-size:10px;}
 
   #editorSection{display:none;}
   #editorSection h2{color:#ffffff;font-weight:700;}
@@ -163,6 +155,7 @@
         <option value="Chernarus">Chernarus</option>
         <option value="Livonia">Livonia</option>
         <option value="Sakhal">Sakhal</option>
+        <option value="Nasdara">Nasdara</option>
       </select>
       <div id="status">Loading Chernarus…</div>
     </div>
@@ -172,20 +165,11 @@
       <div id="dropZone">Drag &amp; drop a territory XML here,<br>or click to choose a file</div>
       <input type="file" id="fileInput" accept=".xml" style="display:none">
       <div id="loadStatus"></div>
-    </div>
-
-    <div class="section" id="filterSection" style="display:none">
-      <h2>4 — Filter markers</h2>
-      <div class="btnrow3">
-        <button id="filterAllBtn">All</button>
-        <button id="filterNoneBtn">None</button>
-        <button id="filterInvertBtn">Invert</button>
-      </div>
       <div id="legend"></div>
     </div>
 
     <div class="section" id="editorSection">
-      <h2>5 — Selected zone</h2>
+      <h2>4 — Selected zone</h2>
       <div id="editorLabel"></div>
       <label>Name</label>
       <input type="text" id="editName" list="zoneNamesList" autocomplete="off">
@@ -205,14 +189,10 @@
       <label>Radius</label>
       <input type="number" id="editR" step="0.01">
       <div class="hint">Drag a marker to move it. Double-click a marker, then move the mouse and click to set its radius.</div>
-      <div class="row2" style="margin-top:12px;">
-        <button id="dupZoneBtn">Duplicate</button>
-        <button id="delZoneBtn" class="danger">Delete</button>
-      </div>
     </div>
 
     <div class="section">
-      <h2>6 — Export</h2>
+      <h2>5 — Export</h2>
       <button id="exportBtn" class="primary">Export updated XML</button>
       <div id="exportStatus"></div>
     </div>
@@ -234,7 +214,8 @@
   const MAP_DEFAULTS = {
     Chernarus: { worldSize: 15360, tileUrl: 'tiles/chernarus/{z}/{x}/{y}.webp', maxZoom: 7, tms: false },
     Livonia:   { worldSize: 12800, tileUrl: 'tiles/livonia/{z}/{x}/{y}.webp',   maxZoom: 7, tms: false },
-    Sakhal:    { worldSize: 15360, tileUrl: 'tiles/sakhal/{z}/{x}/{y}.webp',    maxZoom: 7, tms: false }
+    Sakhal:    { worldSize: 15360, tileUrl: 'tiles/sakhal/{z}/{x}/{y}.webp',    maxZoom: 7, tms: false },
+    Nasdara:   { worldSize: 16384, tileUrl: 'tiles/nasdara/{z}/{x}/{y}.webp',   maxZoom: 7, tms: false }
   };
 
   // ---------- GitHub access (tiles only) ----------
@@ -516,6 +497,7 @@
 
     const territories = [];
     const zonesById = {};
+    let nextId = 1;
 
     for (const terrNode of Array.from(root.children)){
       if (terrNode.nodeName.toLowerCase() !== 'territory') continue;
@@ -532,11 +514,10 @@
         } else if (node.nodeType === Node.ELEMENT_NODE && node.nodeName.toLowerCase() === 'zone'){
           const zAttrs = {};
           for (const a of Array.from(node.attributes)) zAttrs[a.name] = a.value;
-          const id = 'z' + (idCounter++);
+          const id = 'z' + (nextId++);
           const known = ['name','smin','smax','dmin','dmax','x','z','r'];
           const otherAttrs = {};
           for (const k in zAttrs){ if (!known.includes(k)) otherAttrs[k] = zAttrs[k]; }
-          if (!currentGroup){ currentGroup = { label: '', zoneIds: [] }; groups.push(currentGroup); }
           const zone = {
             id,
             name: zAttrs.name || '',
@@ -547,11 +528,11 @@
             x: parseFloat(zAttrs.x) || 0,
             z: parseFloat(zAttrs.z) || 0,
             r: parseFloat(zAttrs.r) || 0,
-            label: currentGroup.label,
-            otherAttrs,
-            _group: currentGroup
+            label: currentGroup ? currentGroup.label : '',
+            otherAttrs
           };
           zonesById[id] = zone;
+          if (!currentGroup){ currentGroup = { label: '', zoneIds: [] }; groups.push(currentGroup); }
           currentGroup.zoneIds.push(id);
         }
       }
@@ -590,9 +571,6 @@
   let nameColors = {};
   let selectedZoneId = null;
   let radiusEditId = null;
-  let idCounter = 1;
-  let hiddenNames = new Set();
-  let lastLegendNames = new Set();
   let radiusEditOriginal = null;
 
   const PALETTE = ['#c9a24b','#7ac76e','#e06046','#5aa9e6','#c17fe0','#e0c14b','#4bc9b0','#e07fae','#8fbf5a','#bf5a8f','#5abf8f','#bf8f5a','#e0925a','#7f9ee0'];
@@ -647,68 +625,16 @@
     const names = new Set(Object.values(zonesById).map(z => z.name).filter(Boolean));
     const dl = el('zoneNamesList');
     dl.innerHTML = Array.from(names).sort().map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
-    lastLegendNames = names;
-    el('filterSection').style.display = names.size ? 'block' : 'none';
     renderLegend(names);
-    applyFilter();
   }
 
   function renderLegend(names){
     const legend = el('legend');
     const sorted = Array.from(names).sort();
-    const counts = {};
-    Object.values(zonesById).forEach(z => { counts[z.name] = (counts[z.name] || 0) + 1; });
     legend.innerHTML = sorted.length
-      ? sorted.map(n => `
-        <label class="legend-row">
-          <input type="checkbox" class="legend-check" data-name="${escapeHtml(n)}" ${hiddenNames.has(n) ? '' : 'checked'}>
-          <span class="legend-swatch" style="background:${getColorForName(n)}"></span>
-          <span class="legend-name">${escapeHtml(n)}</span>
-          <span class="legend-count">${counts[n] || 0}</span>
-        </label>`).join('')
+      ? sorted.map(n => `<div class="legend-row"><span class="legend-swatch" style="background:${getColorForName(n)}"></span>${escapeHtml(n)}</div>`).join('')
       : '';
   }
-
-  function applyFilter(){
-    if (!zoneLayerGroup) return;
-    for (const id in zonesById){
-      const z = zonesById[id];
-      const visible = !hiddenNames.has(z.name);
-      if (!z.marker || !z.circle) continue;
-      if (visible){
-        if (!zoneLayerGroup.hasLayer(z.marker)) zoneLayerGroup.addLayer(z.marker);
-        if (!zoneLayerGroup.hasLayer(z.circle)) zoneLayerGroup.addLayer(z.circle);
-      } else {
-        if (zoneLayerGroup.hasLayer(z.marker)) zoneLayerGroup.removeLayer(z.marker);
-        if (zoneLayerGroup.hasLayer(z.circle)) zoneLayerGroup.removeLayer(z.circle);
-        if (selectedZoneId === id) deselect();
-      }
-    }
-  }
-
-  el('legend').addEventListener('change', (e)=>{
-    if (!e.target.classList.contains('legend-check')) return;
-    const name = e.target.dataset.name;
-    if (e.target.checked) hiddenNames.delete(name); else hiddenNames.add(name);
-    applyFilter();
-  });
-  el('filterAllBtn').addEventListener('click', ()=>{
-    hiddenNames.clear();
-    renderLegend(lastLegendNames);
-    applyFilter();
-  });
-  el('filterNoneBtn').addEventListener('click', ()=>{
-    hiddenNames = new Set(lastLegendNames);
-    renderLegend(lastLegendNames);
-    applyFilter();
-  });
-  el('filterInvertBtn').addEventListener('click', ()=>{
-    const inverted = new Set();
-    lastLegendNames.forEach(n => { if (!hiddenNames.has(n)) inverted.add(n); });
-    hiddenNames = inverted;
-    renderLegend(lastLegendNames);
-    applyFilter();
-  });
 
   function restyleMarker(z){
     const color = getColorForName(z.name);
@@ -796,59 +722,6 @@
     z.marker.setTooltipContent(buildZoneTooltip(z));
   });
 
-  // ---------- delete / duplicate ----------
-  function deleteZone(id){
-    const z = zonesById[id];
-    if (!z) return;
-    if (zoneLayerGroup){
-      if (z.marker) zoneLayerGroup.removeLayer(z.marker);
-      if (z.circle) zoneLayerGroup.removeLayer(z.circle);
-    }
-    if (z._group){
-      const idx = z._group.zoneIds.indexOf(id);
-      if (idx >= 0) z._group.zoneIds.splice(idx, 1);
-      if (z._group.zoneIds.length === 0){
-        for (const terr of state.territories){
-          const gi = terr.groups.indexOf(z._group);
-          if (gi >= 0){ terr.groups.splice(gi, 1); break; }
-        }
-      }
-    }
-    delete zonesById[id];
-    if (selectedZoneId === id) deselect();
-    refreshZoneNamesList();
-  }
-
-  function duplicateZone(id){
-    const src = zonesById[id];
-    if (!src) return;
-    const newId = 'z' + (idCounter++);
-    const clone = {
-      id: newId,
-      name: src.name,
-      smin: src.smin, smax: src.smax, dmin: src.dmin, dmax: src.dmax,
-      x: src.x + 10, z: src.z + 10, r: src.r,
-      label: src.label,
-      otherAttrs: Object.assign({}, src.otherAttrs),
-      _group: src._group
-    };
-    zonesById[newId] = clone;
-    if (src._group){
-      const idx = src._group.zoneIds.indexOf(id);
-      src._group.zoneIds.splice(idx + 1, 0, newId);
-    }
-    plantZoneMarker(clone);
-    refreshZoneNamesList();
-    selectZone(newId);
-  }
-
-  el('dupZoneBtn').addEventListener('click', ()=>{
-    if (selectedZoneId) duplicateZone(selectedZoneId);
-  });
-  el('delZoneBtn').addEventListener('click', ()=>{
-    if (selectedZoneId) deleteZone(selectedZoneId);
-  });
-
   // ---------- radius drag-edit ----------
   function startRadiusEdit(id){
     if (radiusEditId) endRadiusEdit();
@@ -918,7 +791,6 @@
         state.fileBaseName = file.name.replace(/\.[^.]+$/, '');
         state.fileExt = (file.name.match(/\.[^.]+$/) || ['.xml'])[0];
         nameColors = {};
-        hiddenNames = new Set();
         deselect();
         renderAllZones();
         const zCount = Object.keys(zonesById).length;
